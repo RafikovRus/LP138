@@ -20,7 +20,7 @@ PRIZES = [
 # Хранилище выигрышей пользователей
 user_wins = {}
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start - приветствие и описание бота"""
     user = update.effective_user
     
@@ -211,7 +211,7 @@ def main() -> None:
     application = Application.builder().token("8735371477:AAE1dRwtNTR4Uui9QdNgUV5Cu1a0TcjUfQs").build()
 
     # Регистрация обработчиков команд
-    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("prize", prize_command))
     
     # Регистрация обработчика кнопок
