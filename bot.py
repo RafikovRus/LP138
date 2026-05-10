@@ -6,8 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters, ConversationHandler
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, ConversationHandler
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -26,8 +26,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ===== РАБОТА С ФАЙЛАМИ =====
+
+def ensure_data_dir():
+    """Создаёт папку data если её нет"""
+    data_dir = Path(PRIZE_PATH).parent
+    data_dir.mkdir(exist_ok=True)
+
 def load_prizes():
     """Загружает призы из JSON файла"""
+    ensure_data_dir()
     try:
         with open(PRIZE_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -38,6 +46,7 @@ def load_prizes():
 
 def save_prizes(prizes):
     """Сохраняет призы в JSON файл"""
+    ensure_data_dir()
     try:
         with open(PRIZE_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -49,6 +58,7 @@ def save_prizes(prizes):
 
 def load_winners():
     """Загружает список победителей"""
+    ensure_data_dir()
     try:
         with open(WINNERS_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -57,6 +67,7 @@ def load_winners():
 
 def save_winner(winner_data):
     """Сохраняет информацию о победителе"""
+    ensure_data_dir()
     winners_data = load_winners()
     winners_data["winners"].append(winner_data)
     with open(WINNERS_PATH, "w", encoding="utf-8") as f:
@@ -90,79 +101,69 @@ def draw_prize(prizes):
 # ===== ОБРАБОТЧИКИ КОМАНД =====
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Главное меню с 3 кнопками"""
+    """Команда /start - приветствие"""
     user = update.effective_user
     
-    keyboard = [
-        [InlineKeyboardButton("ℹ️ Информация о проекте", callback_data="about")],
-        [InlineKeyboardButton("🎁 Список призов", callback_data="prizes_list")],
-        [InlineKeyboardButton("🎟️ Участвовать", callback_data="participate")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
     welcome_text = (
-        f"✨ <b>Добро пожаловать, {user.mention_html()}!</b> ✨\n\n"
-        f"🎯 <b>Благотворительная беспроигрышная лотерея</b>\n"
-        f"Каждый участник гарантированно получает подарок!\n\n"
-        f"📜 <b>Как участвовать:</b>\n"
-        f"1️⃣ Нажмите кнопку «Участвовать»\n"
-        f"2️⃣ Введите код вашего билета\n"
-        f"3️⃣ Получите мгновенный результат розыгрыша\n\n"
+        f"✨ <b>Добро пожаловать в благотворительную лотерею, {user.mention_html()}!</b> ✨\n\n"
+        f"🎯 Это <b>беспроигрышная лотерея</b> — каждый участник гарантированно получает подарок!\n\n"
+        f"📜 <b>Доступные команды:</b>\n"
+        f"• /info - информация о проекте\n"
+        f"• /prize - список призов\n"
+        f"• /participate - участвовать в лотерее\n\n"
         f"<i>Все собранные средства идут на благотворительность! ❤️</i>"
     )
     
-    await update.message.reply_html(welcome_text, reply_markup=reply_markup)
+    await update.message.reply_html(welcome_text)
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик нажатий на кнопки"""
-    query = update.callback_query
-    await query.answer()
+async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Команда /info - информация о проекте"""
+    info_text = (
+        "🌱 <b>О благотворительном проекте</b>\n\n"
+        "Мы — <b>«Доброе сердце»</b> — благотворительный фонд, "
+        "который помогает детям-сиротам и пожилым людям.\n\n"
+        "🎯 <b>Наша миссия:</b>\n"
+        "Сделать помощь доступной и понятной каждому.\n\n"
+        "📊 <b>Результаты за 2024 год:</b>\n"
+        "• Помогли 150+ семьям\n"
+        "• Собрали 500 000 ₽ на лечение\n"
+        "• Провели 20+ благотворительных акций\n\n"
+        "🌐 <b>Наши проекты:</b>\n"
+        "• @charity_news — новости фонда\n"
+        "• @help_center — центр помощи\n\n"
+        "<i>Спасибо, что вы с нами!</i>"
+    )
     
-    if query.data == "about":
-        about_text = (
-            "🌱 <b>О благотворительном проекте</b>\n\n"
-            "Мы — <b>«Доброе сердце»</b> — благотворительный фонд, "
-            "который помогает детям-сиротам и пожилым людям.\n\n"
-            "🎯 <b>Наша миссия:</b>\n"
-            "Сделать помощь доступной и понятной каждому.\n\n"
-            "📊 <b>Результаты за 2024 год:</b>\n"
-            "• Помогли 150+ семьям\n"
-            "• Собрали 500 000 ₽ на лечение\n"
-            "• Провели 20+ благотворительных акций\n\n"
-            "<i>Спасибо, что вы с нами!</i>"
-        )
-        await query.edit_message_text(about_text, parse_mode="HTML")
-    
-    elif query.data == "prizes_list":
-        prizes, _ = load_prizes()
-        
-        if not prizes:
-            await query.edit_message_text(
-                "😔 Информация о призах временно недоступна.",
-                parse_mode="HTML"
-            )
-            return
-        
-        prizes_text = "🎁 <b>Список призов в лотерее:</b>\n\n"
-        for prize in prizes:
-            status = "✅" if prize["remaining"] > 0 else "❌"
-            prizes_text += f"{status} <b>{prize['name']}</b>\n"
-            prizes_text += f"   └ {prize['description']}\n"
-            prizes_text += f"   └ Осталось: {prize['remaining']} из {prize['quantity']}\n\n"
-        
-        await query.edit_message_text(prizes_text, parse_mode="HTML")
-    
-    elif query.data == "participate":
-        await query.edit_message_text(
-            "🎟️ <b>Введите код вашего билета</b>\n\n"
-            "Пожалуйста, отправьте код билета одним сообщением.\n"
-            "Код должен быть в формате: <code>TICKET-2024-XXX</code>\n\n"
-            "Для отмены отправьте /cancel",
-            parse_mode="HTML"
-        )
-        return WAITING_FOR_TICKET
+    await update.message.reply_html(info_text)
 
-async def handle_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def prize_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Команда /prize - список призов"""
+    prizes, _ = load_prizes()
+    
+    if not prizes:
+        await update.message.reply_html("😔 Информация о призах временно недоступна.")
+        return
+    
+    prizes_text = "🎁 <b>Список призов в лотерее:</b>\n\n"
+    for prize in prizes:
+        status = "✅" if prize["remaining"] > 0 else "❌"
+        prizes_text += f"{status} <b>{prize['name']}</b>\n"
+        prizes_text += f"   └ {prize['description']}\n"
+        prizes_text += f"   └ Осталось: {prize['remaining']} из {prize['quantity']}\n\n"
+    
+    await update.message.reply_html(prizes_text)
+
+async def participate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Команда /participate - начало участия в лотерее"""
+    await update.message.reply_html(
+        "🎟️ <b>Введите код вашего билета</b>\n\n"
+        "Пожалуйста, отправьте код билета одним сообщением.\n"
+        "Код должен быть в формате: <code>TICKET-2024-XXX</code>\n\n"
+        "Для отмены отправьте /cancel"
+    )
+    return WAITING_FOR_TICKET
+
+async def handle_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Обработка введённого кода билета"""
     ticket_code = update.message.text.strip()
     user_id = update.effective_user.id
@@ -173,44 +174,40 @@ async def handle_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     # Проверка валидности кода
     if ticket_code not in valid_tickets:
-        await update.message.reply_text(
+        await update.message.reply_html(
             "❌ <b>Неверный код билета!</b>\n\n"
             "Пожалуйста, проверьте код и попробуйте снова.\n"
             "Если у вас нет билета, обратитесь к организаторам.\n\n"
-            "Используйте /start для возврата в главное меню.",
-            parse_mode="HTML"
+            "Используйте /start для возврата в главное меню."
         )
-        return
+        return ConversationHandler.END
     
     # Проверка, не использован ли уже билет
     if is_ticket_used(ticket_code):
-        await update.message.reply_text(
+        await update.message.reply_html(
             "⚠️ <b>Этот билет уже был использован!</b>\n\n"
             "Каждый билет даёт право только на один подарок.\n"
-            "Используйте /start для возврата в главное меню.",
-            parse_mode="HTML"
+            "Используйте /start для возврата в главное меню."
         )
-        return
+        return ConversationHandler.END
     
     # Проверка наличия призов
     available_prizes = get_available_prizes(prizes)
     if not available_prizes:
-        await update.message.reply_text(
+        await update.message.reply_html(
             "😔 <b>К сожалению, все подарки уже разобраны!</b>\n\n"
             "Спасибо за участие! Следите за новыми акциями.\n"
-            "Используйте /start для возврата в главное меню.",
-            parse_mode="HTML"
+            "Используйте /start для возврата в главное меню."
         )
-        return
+        return ConversationHandler.END
     
     # Розыгрыш приза
     prize = draw_prize(prizes)
     if not prize:
-        await update.message.reply_text(
-            "😔 Произошла ошибка при розыгрыше. Пожалуйста, попробуйте позже.",
-            parse_mode="HTML"
+        await update.message.reply_html(
+            "😔 Произошла ошибка при розыгрыше. Пожалуйста, попробуйте позже."
         )
-        return
+        return ConversationHandler.END
     
     # Обновляем количество оставшихся призов
     for p in prizes:
@@ -243,15 +240,16 @@ async def handle_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"<i>Спасибо за участие в благотворительной лотерее! 💝</i>"
     )
     
-    await update.message.reply_text(win_text, parse_mode="HTML")
+    await update.message.reply_html(win_text)
+    return ConversationHandler.END
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Отмена ввода кода"""
-    await update.message.reply_text(
+    await update.message.reply_html(
         "❌ Ввод кода отменён.\n"
-        "Используйте /start для возврата в главное меню.",
-        parse_mode="HTML"
+        "Используйте /start для возврата в главное меню."
     )
+    return ConversationHandler.END
 
 def main() -> None:
     """Запуск бота"""
@@ -263,13 +261,18 @@ def main() -> None:
     
     # Регистрация обработчиков команд
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("cancel", cancel))
+    application.add_handler(CommandHandler("info", info_command))
+    application.add_handler(CommandHandler("prize", prize_command))
     
-    # Регистрация обработчика кнопок
-    application.add_handler(CallbackQueryHandler(button_handler))
-    
-    # Регистрация обработчика сообщений для ввода кода
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_ticket))
+    # ConversationHandler для команды participate
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("participate", participate_command)],
+        states={
+            WAITING_FOR_TICKET: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_ticket)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    application.add_handler(conv_handler)
     
     logger.info("🤖 Бот запущен и готов к работе!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
