@@ -216,8 +216,6 @@ async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "Любая сумма помогает нам продолжать добрые дела!\n\n"
         "🔹 <b>Сделать пожертвование:</b>\n"
         "👉 <a href='https://pay.cloudtips.ru/p/b4eda1b6'>pay.cloudtips.ru/p/b4eda1b6</a>\n\n"
-        "🇷🇺 <b>Налоговый вычет:</b>\n"
-        "Все пожертвования принимаются официально — вы получите документы для возврата 13% налога.\n\n"
         "<i>Спасибо за вашу поддержку! 🙏</i>"
     )
     
