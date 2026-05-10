@@ -78,6 +78,12 @@ def is_ticket_used(ticket_code):
     winners_data = load_winners()
     return any(w.get("ticket_code") == ticket_code for w in winners_data["winners"])
 
+def get_user_prizes(user_id):
+    """Возвращает список выигрышей пользователя"""
+    winners_data = load_winners()
+    user_wins = [w for w in winners_data["winners"] if w.get("user_id") == user_id]
+    return user_wins
+
 def get_available_prizes(prizes):
     """Возвращает список доступных призов"""
     return [p for p in prizes if p["remaining"] > 0]
@@ -110,7 +116,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"📜 <b>Доступные команды:</b>\n"
         f"• /info - информация о проекте\n"
         f"• /prize - список призов\n"
-        f"• /participate - участвовать в лотерее\n\n"
+        f"• /participate - участвовать в лотерее\n"
+        f"• /my_prizes - мои выигранные призы\n"
+        f"• /donate - поддержать проект\n\n"
         f"<i>Все собранные средства идут на благотворительность! ❤️</i>"
     )
     
@@ -120,8 +128,8 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """Команда /info - информация о проекте"""
     info_text = (
         "🌱 <b>О благотворительном проекте</b>\n\n"
-        "Мы — <b>«Доброе сердце»</b> — благотворительный фонд, "
-        "который помогает детям-сиротам и пожилым людям.\n\n"
+        "Мы — <b>«Zerno. Зона первой помощи»</b> — благотворительный проект, "
+        "который ... описание будет потом.\n\n"
         "🎯 <b>Наша миссия:</b>\n"
         "Сделать помощь доступной и понятной каждому.\n\n"
         "📊 <b>Результаты за 2024 год:</b>\n"
@@ -129,7 +137,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "• Собрали 500 000 ₽ на лечение\n"
         "• Провели 20+ благотворительных акций\n\n"
         "🌐 <b>Наши проекты:</b>\n"
-        "• @charity_news — новости фонда\n"
+        "• @zerno_help — новости проекта\n"
         "• @help_center — центр помощи\n\n"
         "<i>Спасибо, что вы с нами!</i>"
     )
@@ -152,6 +160,68 @@ async def prize_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         prizes_text += f"   └ Осталось: {prize['remaining']} из {prize['quantity']}\n\n"
     
     await update.message.reply_html(prizes_text)
+
+async def my_prizes_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Команда /my_prizes - показать выигрыши пользователя"""
+    user_id = update.effective_user.id
+    user_prizes = get_user_prizes(user_id)
+    
+    if not user_prizes:
+        await update.message.reply_html(
+            "🎟️ <b>У вас пока нет выигрышей</b>\n\n"
+            "Используйте команду /participate, чтобы участвовать в лотерее "
+            "и получить свой первый подарок!"
+        )
+        return
+    
+    # Группируем призы по статусу получения
+    pending_prizes = [p for p in user_prizes if not p.get("received", False)]
+    received_prizes = [p for p in user_prizes if p.get("received", False)]
+    
+    text = "🎁 <b>Ваши выигранные призы</b>\n\n"
+    
+    if pending_prizes:
+        text += "📦 <b>Ожидают получения:</b>\n"
+        for i, prize in enumerate(pending_prizes, 1):
+            won_date = datetime.fromisoformat(prize["won_at"]).strftime("%d.%m.%Y %H:%M")
+            text += (
+                f"{i}. <b>{prize['prize_name']}</b>\n"
+                f"   📅 Выигран: {won_date}\n"
+                f"   🎫 Код приза: <code>{prize['prize_code']}</code>\n"
+                f"   🎟️ Билет: {prize['ticket_code']}\n\n"
+            )
+    
+    if received_prizes:
+        text += "✅ <b>Полученные призы:</b>\n"
+        for i, prize in enumerate(received_prizes, 1):
+            won_date = datetime.fromisoformat(prize["won_at"]).strftime("%d.%m.%Y %H:%M")
+            received_date = datetime.fromisoformat(prize.get("received_at", prize["won_at"])).strftime("%d.%m.%Y")
+            text += (
+                f"{i}. <b>{prize['prize_name']}</b>\n"
+                f"   📅 Выигран: {won_date}\n"
+                f"   ✅ Получен: {received_date}\n\n"
+            )
+    
+    if not pending_prizes and not received_prizes:
+        text = "🎟️ <b>У вас пока нет выигрышей</b>\n\nИспользуйте команду /participate, чтобы участвовать в лотерее!"
+    
+    text += "\n<i>Для получения приза свяжитесь с координатором: @volunteer_contact</i>"
+    
+    await update.message.reply_html(text)
+
+async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Команда /donate - поддержать проект"""
+    donate_text = (
+        "💝 <b>Поддержать проект «Zerno. Зона первой помощи»</b>\n\n"
+        "Любая сумма помогает нам продолжать добрые дела!\n\n"
+        "🔹 <b>Сделать пожертвование:</b>\n"
+        "👉 <a href='https://pay.cloudtips.ru/p/b4eda1b6'>pay.cloudtips.ru/p/b4eda1b6</a>\n\n"
+        "🇷🇺 <b>Налоговый вычет:</b>\n"
+        "Все пожертвования принимаются официально — вы получите документы для возврата 13% налога.\n\n"
+        "<i>Спасибо за вашу поддержку! 🙏</i>"
+    )
+    
+    await update.message.reply_html(donate_text, disable_web_page_preview=False)
 
 async def participate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Команда /participate - начало участия в лотерее"""
@@ -187,7 +257,7 @@ async def handle_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         await update.message.reply_html(
             "⚠️ <b>Этот билет уже был использован!</b>\n\n"
             "Каждый билет даёт право только на один подарок.\n"
-            "Используйте /start для возврата в главное меню."
+            "Используйте /my_prizes для просмотра ваших выигрышей."
         )
         return ConversationHandler.END
     
@@ -223,7 +293,8 @@ async def handle_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         "ticket_code": ticket_code,
         "prize_name": prize["name"],
         "prize_code": prize["code"],
-        "won_at": datetime.now().isoformat()
+        "won_at": datetime.now().isoformat(),
+        "received": False  # статус получения приза
     }
     save_winner(winner_info)
     
@@ -236,7 +307,9 @@ async def handle_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         f"<b>Как получить подарок:</b>\n"
         f"Сообщите код приза нашему координатору:\n"
         f"📱 Telegram: @volunteer_contact\n"
-        f"📧 Email: gift@charity-project.org\n\n"
+        f"📧 Email: gift@zerno-project.org\n\n"
+        f"💡 <b>Совет:</b> Используйте команду /my_prizes, "
+        f"чтобы в любой момент посмотреть все ваши выигранные призы.\n\n"
         f"<i>Спасибо за участие в благотворительной лотерее! 💝</i>"
     )
     
@@ -263,6 +336,8 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("info", info_command))
     application.add_handler(CommandHandler("prize", prize_command))
+    application.add_handler(CommandHandler("my_prizes", my_prizes_command))
+    application.add_handler(CommandHandler("donate", donate_command))
     
     # ConversationHandler для команды participate
     conv_handler = ConversationHandler(
